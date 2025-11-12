@@ -1,0 +1,21 @@
+{
+  "businessName": "Default Business",
+  "facebook": {
+    "pageId": "YOUR_PAGE_ID",
+    "appId": "YOUR_APP_ID",
+    "appSecret": "YOUR_APP_SECRET",
+    "verifyToken": "YOUR_VERIFY_TOKEN",
+    "accessToken": "YOUR_PAGE_ACCESS_TOKEN"
+  },
+  "webhook": {
+    "callbackUrl": "https://client.example.com/facebook/webhook",
+    "port": 0
+  },
+  "features": {
+    "autoPostToTelegram": false,
+    "logIncomingData": true,
+    "keepRawPayloadDays": 30
+  }
+}
+
+

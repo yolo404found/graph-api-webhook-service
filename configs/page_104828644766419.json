@@ -1,0 +1,22 @@
+{
+    "businessName": "Cool Music Enterta",
+    "facebook": {
+      "pageId": "104828644766419",
+      "appId": "808468275327880",
+      "appSecret": "2dc396e2d53f9a170f5ef46ff4c1452b",
+      "verifyToken": "aKd6OMTBDWSOd57AXluKh2Mmqi4dsUaJ",
+      "accessToken": "YOUR_PAGE_ACCESS_TOKEN"
+    },
+    "webhook": {
+      "callbackUrl": "http://localhost:3001/webhook/facebook",
+      "port": 0
+    },
+    "features": {
+      "autoPostToTelegram": false,
+      "logIncomingData": true,
+      "keepRawPayloadDays": 30
+    }
+  }
+  
+  
+  
