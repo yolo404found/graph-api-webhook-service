@@ -11,7 +11,7 @@ const { serviceConfig } = require('./config');
 const webhookRouter = require('./routes/webhook');
 const registrationRouter = require('./routes/registration');
 const authRouter = require('./routes/auth');
-const testRouter = require('../../test/test');
+const testRouter = require('../test/test');
 
 async function start() {
 	const app = express();
