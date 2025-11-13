@@ -5,8 +5,17 @@ const mongoose = require('mongoose');
 const ClientConfigSchema = new mongoose.Schema(
 	{
 		businessName: { type: String, required: true },
+		objectType: { 
+			type: String, 
+			enum: ['page', 'group'], 
+			required: true,
+			default: 'page',
+			index: true
+		},
 		facebook: {
-			pageId: { type: String, required: true, index: true, unique: true },
+			pageId: { type: String, index: true }, // For pages
+			groupId: { type: String, index: true }, // For groups
+			objectId: { type: String, required: true, index: true, unique: true }, // Combined unique ID (pageId or groupId)
 			appId: { type: String, required: true },
 			appSecret: { type: String, required: true },
 			verifyToken: { type: String, required: true },

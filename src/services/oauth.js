@@ -17,20 +17,35 @@ class OAuthService {
 
 	/**
 	 * Generate authorization URL for client to grant permissions
-	 * @param {string} pageId - Facebook Page ID
-	 * @param {string} state - Optional state parameter (can include pageId)
+	 * @param {string} objectId - Facebook Page ID or Group ID
+	 * @param {string} objectType - 'page' or 'group'
+	 * @param {string} state - Optional state parameter
 	 * @returns {string} Authorization URL
 	 */
-	generateAuthUrl(pageId, state = null) {
-		const scopes = [
-			'pages_show_list',           // List user's pages
-			'pages_read_engagement',     // Read page posts and engagement
-			'pages_read_user_content',   // Read content posted by the user
-			'pages_manage_metadata',     // Manage page metadata
-		].join(',');
+	generateAuthUrl(objectId, objectType = 'page', state = null) {
+		let scopes;
+		
+		if (objectType === 'group') {
+			scopes = [
+				'user_groups',
+				'groups_access_member_info',
+				'groups_read_engagement',
+				'pages_read_engagement', // Optional cross-permission for unified webhook read
+				'pages_manage_metadata'  // Optional if you manage webhooks
+			  ].join(',')
+		}
+		 else {
+			// Default to page permissions
+			scopes = [
+				'pages_show_list',           // List user's pages
+				'pages_read_engagement',     // Read page posts and engagement
+				'pages_read_user_content',   // Read content posted by the user
+				'pages_manage_metadata',     // Manage page metadata
+			].join(',');
+		}
 
 		const redirectUri = `${this.baseUrl}/api/auth/callback`;
-		const stateParam = state || pageId;
+		const stateParam = state || `${objectType}:${objectId}`;
 
 		const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?` +
 			`client_id=${this.appId}` +
@@ -68,7 +83,7 @@ class OAuthService {
 	 * Get user's pages and find specific page access token
 	 * @param {string} userAccessToken - User Access Token
 	 * @param {string} pageId - Target Page ID
-	 * @returns {Promise<{pageId: string, accessToken: string, name: string}>} Page info with access token
+	 * @returns {Promise<{objectId: string, accessToken: string, name: string}>} Page info with access token
 	 */
 	async getPageAccessToken(userAccessToken, pageId) {
 		const pagesUrl = `https://graph.facebook.com/v18.0/me/accounts?access_token=${userAccessToken}`;
@@ -90,7 +105,7 @@ class OAuthService {
 		}
 
 		return {
-			pageId: targetPage.id,
+			objectId: targetPage.id,
 			accessToken: targetPage.access_token,
 			name: targetPage.name,
 			category: targetPage.category || null,
@@ -98,24 +113,79 @@ class OAuthService {
 	}
 
 	/**
-	 * Complete OAuth flow: exchange code and get page token
-	 * @param {string} code - Authorization code
-	 * @param {string} pageId - Target Page ID
-	 * @returns {Promise<{pageId: string, accessToken: string, name: string}>} Page info with access token
+	 * Get user's groups and find specific group access token
+	 * For groups, we use the user access token directly (groups don't have separate access tokens)
+	 * @param {string} userAccessToken - User Access Token
+	 * @param {string} groupId - Target Group ID
+	 * @returns {Promise<{objectId: string, accessToken: string, name: string}>} Group info with access token
 	 */
-	async completeOAuthFlow(code, pageId) {
-		logger.info({ pageId }, 'Starting OAuth flow');
-		
+	async getGroupAccessToken(userAccessToken, groupId) {
+		// Get user's groups
+		const groupsUrl = `https://graph.facebook.com/v18.0/me/groups?access_token=${userAccessToken}`;
+		const response = await this.httpsRequest(groupsUrl);
+
+		if (response.error) {
+			throw new Error(response.error.message || 'Failed to get user groups');
+		}
+
+		if (!response.data || response.data.length === 0) {
+			throw new Error('No groups found for this user');
+		}
+
+		const targetGroup = response.data.find(group => group.id === groupId);
+
+		if (!targetGroup) {
+			const availableGroups = response.data.map(g => ({ id: g.id, name: g.name }));
+			throw new Error(`Group ${groupId} not found in user's groups. Available groups: ${JSON.stringify(availableGroups)}`);
+		}
+
+		// For groups, we use the user access token directly
+		// Groups don't have separate access tokens like pages do
+		return {
+			objectId: targetGroup.id,
+			accessToken: userAccessToken, // Use user token for groups
+			name: targetGroup.name,
+		};
+	}
+
+	/**
+	 * Complete OAuth flow: exchange code and get access token
+	 * @param {string} code - Authorization code
+	 * @param {string} objectId - Target Page ID or Group ID
+	 * @param {string} objectType - 'page' or 'group'
+	 * @returns {Promise<{objectId: string, accessToken: string, name: string}>} Object info with access token
+	 */
+	async completeOAuthFlow(code, objectId, objectType = 'page') {
+		logger.info({ objectId, objectType }, 'Starting OAuth flow');
+	  
 		// Step 1: Exchange code for user token
 		const userAccessToken = await this.exchangeCodeForUserToken(code);
-		logger.info({ pageId }, 'Exchanged code for user access token');
-
-		// Step 2: Get page access token
-		const pageInfo = await this.getPageAccessToken(userAccessToken, pageId);
-		logger.info({ pageId, pageName: pageInfo.name }, 'Retrieved page access token');
-
-		return pageInfo;
-	}
+		logger.info({ objectId, objectType }, 'Exchanged code for user access token');
+	  
+		// Step 2: Attempt to get token
+		let objectInfo;
+		try {
+		  if (objectType === 'group') {
+			objectInfo = await this.getGroupAccessToken(userAccessToken, objectId);
+			logger.info({ objectId, objectName: objectInfo.name }, 'Retrieved group access token');
+		  } else {
+			objectInfo = await this.getPageAccessToken(userAccessToken, objectId);
+			logger.info({ objectId, objectName: objectInfo.name }, 'Retrieved page access token');
+		  }
+		} catch (err) {
+		  // 👇 fallback logic: if page not found, try as group
+		  if (err.message.includes('not found in user\'s pages')) {
+			logger.warn({ objectId }, 'Page not found; retrying as group');
+			objectInfo = await this.getGroupAccessToken(userAccessToken, objectId);
+			objectType = 'group';
+		  } else {
+			throw err;
+		  }
+		}
+	  
+		return objectInfo;
+	  }
+	  
 
 	/**
 	 * Helper method for HTTPS requests

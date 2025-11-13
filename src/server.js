@@ -11,7 +11,7 @@ const { serviceConfig } = require('./config');
 const webhookRouter = require('./routes/webhook');
 const registrationRouter = require('./routes/registration');
 const authRouter = require('./routes/auth');
-const testRouter = require('../../test/test');
+const testRouter = require('../test/test');
 
 async function start() {
 	const app = express();
@@ -44,8 +44,8 @@ async function start() {
 			webhook: '/webhook/facebook',
 			register: '/api/register',
 			authCallback: '/api/auth/callback',
-			testWebhook: '/api/test/webhook/:pageId',
-			testStatus: '/api/test/status/:pageId'
+			testWebhook: '/api/test/webhook/:objectId',
+			testStatus: '/api/test/status/:objectId'
 		}
 		});
 	});

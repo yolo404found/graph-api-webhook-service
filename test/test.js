@@ -16,42 +16,45 @@ const router = express.Router();
  * the same way a real webhook would be processed, allowing you to test
  * if the client registration and forwarding is working correctly.
  */
-router.post('/webhook/:pageId', async (req, res) => {
-	const pageId = req.params.pageId;
+router.post('/webhook/:objectId', async (req, res) => {
+	const objectId = req.params.objectId;
 	const requestId = `test-${Date.now()}`;
 
 	try {
-		// Check if client is registered
-		const clientConfig = await ClientConfig.findOne({ 'facebook.pageId': String(pageId) }).lean().exec();
+		// Check if client is registered (using objectId which works for both page and group)
+		const clientConfig = await ClientConfig.findOne({ 'facebook.objectId': String(objectId) }).lean().exec();
 		
 		if (!clientConfig) {
 			return res.status(404).json({
 				error: 'Client not found',
-				message: `No registration found for page ID: ${pageId}`,
-				hint: 'Register this page first at /api/register'
+				message: `No registration found for object ID: ${objectId}`,
+				hint: 'Register this page/group first at /api/register'
 			});
 		}
 
-		// Create a simulated Facebook webhook payload for a new post
+		const objectType = clientConfig.objectType || 'page';
+		const objectName = objectType === 'group' ? 'Group' : 'Page';
+
+		// Create a simulated Facebook webhook payload
 		const webhookPayload = {
-			object: 'page',
+			object: objectType, // 'page' or 'group'
 			entry: [
 				{
-					id: pageId,
+					id: objectId,
 					time: Math.floor(Date.now() / 1000),
 					messaging: [],
 					changes: [
 						{
 							value: {
 								from: {
-									id: pageId,
-									name: clientConfig.businessName || 'Test Page'
+									id: objectId,
+									name: clientConfig.businessName || `Test ${objectName}`
 								},
 								item: 'post',
-								post_id: `${pageId}_${Date.now()}`,
+								post_id: `${objectId}_${Date.now()}`,
 								verb: 'add',
 								created_time: Math.floor(Date.now() / 1000),
-								message: 'This is a test post from the webhook test endpoint'
+								message: `This is a test post from the webhook test endpoint for ${objectType}`
 							},
 							field: 'feed'
 						}
@@ -71,11 +74,11 @@ router.post('/webhook/:pageId', async (req, res) => {
 			return res.status(400).json({
 				error: 'Missing callback URL',
 				message: 'Client config is missing callbackUrl',
-				pageId: pageId
+				objectId: objectId
 			});
 		}
 
-		logger.info({ pageId, callbackUrl, requestId }, 'Simulating webhook for test');
+		logger.info({ objectId, objectType, callbackUrl, requestId }, 'Simulating webhook for test');
 
 		// Forward the payload (same as real webhook)
 		const result = await forwardPayload({
@@ -83,7 +86,7 @@ router.post('/webhook/:pageId', async (req, res) => {
 			secretToken,
 			rawBodyBuffer,
 			requestId,
-			pageId: String(pageId),
+			pageId: String(objectId), // Keep parameter name for backward compatibility
 			timeoutMs: serviceConfig.forwardTimeoutMs,
 		});
 
@@ -92,7 +95,8 @@ router.post('/webhook/:pageId', async (req, res) => {
 			res.status(200).json({
 				success: true,
 				message: 'Test webhook sent successfully',
-				pageId: pageId,
+				objectType: objectType,
+				objectId: objectId,
 				clientName: clientConfig.businessName,
 				callbackUrl: callbackUrl,
 				requestId: requestId,
@@ -107,7 +111,8 @@ router.post('/webhook/:pageId', async (req, res) => {
 			res.status(500).json({
 				success: false,
 				message: 'Test webhook forwarding failed',
-				pageId: pageId,
+				objectType: objectType,
+				objectId: objectId,
 				callbackUrl: callbackUrl,
 				requestId: requestId,
 				error: {
@@ -120,37 +125,42 @@ router.post('/webhook/:pageId', async (req, res) => {
 		}
 
 	} catch (error) {
-		logger.error({ err: error, pageId, requestId }, 'Test webhook failed');
+		logger.error({ err: error, objectId, requestId }, 'Test webhook failed');
 		res.status(500).json({
 			error: 'Test webhook failed',
 			message: error.message,
-			pageId: pageId,
+			objectId: objectId,
 			requestId: requestId
 		});
 	}
 });
 
 /**
- * GET /api/test/status/:pageId
- * Check if a page is registered and get its status
+ * GET /api/test/status/:objectId
+ * Check if a page or group is registered and get its status
  */
-router.get('/status/:pageId', async (req, res) => {
-	const pageId = req.params.pageId;
+router.get('/status/:objectId', async (req, res) => {
+	const objectId = req.params.objectId;
 
 	try {
-		const clientConfig = await ClientConfig.findOne({ 'facebook.pageId': String(pageId) }).lean().exec();
+		const clientConfig = await ClientConfig.findOne({ 'facebook.objectId': String(objectId) }).lean().exec();
 
 		if (!clientConfig) {
 			return res.status(404).json({
 				registered: false,
-				message: `Page ${pageId} is not registered`,
+				message: `Object ${objectId} is not registered`,
 				hint: 'Register at /api/register'
 			});
 		}
 
+		const objectType = clientConfig.objectType || 'page';
+
 		res.status(200).json({
 			registered: true,
-			pageId: pageId,
+			objectType: objectType,
+			objectId: objectId,
+			pageId: clientConfig.facebook?.pageId,
+			groupId: clientConfig.facebook?.groupId,
 			businessName: clientConfig.businessName,
 			callbackUrl: clientConfig.webhook?.callbackUrl,
 			registrationStatus: clientConfig.registration?.status || 'unknown',
@@ -162,7 +172,7 @@ router.get('/status/:pageId', async (req, res) => {
 		});
 
 	} catch (error) {
-		logger.error({ err: error, pageId }, 'Failed to get registration status');
+		logger.error({ err: error, objectId }, 'Failed to get registration status');
 		res.status(500).json({
 			error: 'Failed to get status',
 			message: error.message

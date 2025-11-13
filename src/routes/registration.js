@@ -142,24 +142,33 @@ router.get('/register', (req, res) => {
 </head>
 <body>
 	<div class="container">
-		<h1>Facebook Page Registration</h1>
-		<p class="subtitle">Register your Facebook page to receive webhooks</p>
+		<h1>Facebook Registration</h1>
+		<p class="subtitle">Register your Facebook Page or Group to receive webhooks</p>
 		
 		<div id="message"></div>
 		
 		<form id="registrationForm">
 			<div class="form-group">
-				<label for="businessName">Business/Page Name <span class="required">*</span></label>
-				<input type="text" id="businessName" name="businessName" required 
-					placeholder="e.g., Cool Music Enter">
-				<div class="help-text">The name of your business or Facebook page</div>
+				<label for="objectType">Object Type <span class="required">*</span></label>
+				<select id="objectType" name="objectType" required style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+					<option value="page">Page</option>
+					<option value="group">Group</option>
+				</select>
+				<div class="help-text">Select whether you're registering a Facebook Page or Group</div>
 			</div>
 
 			<div class="form-group">
-				<label for="pageId">Facebook Page ID <span class="required">*</span></label>
-				<input type="text" id="pageId" name="pageId" required 
+				<label for="businessName">Business/Page/Group Name <span class="required">*</span></label>
+				<input type="text" id="businessName" name="businessName" required 
+					placeholder="e.g., Cool Music Enter">
+				<div class="help-text">The name of your business, Facebook page, or group</div>
+			</div>
+
+			<div class="form-group">
+				<label id="objectIdLabel" for="objectId">Facebook Page ID <span class="required">*</span></label>
+				<input type="text" id="objectId" name="objectId" required 
 					placeholder="e.g., 104828644766419">
-				<div class="help-text">Your Facebook Page ID (numeric)</div>
+				<div class="help-text" id="objectIdHelp">Your Facebook Page ID (numeric)</div>
 			</div>
 
 			<div class="form-group">
@@ -205,10 +214,13 @@ router.get('/register', (req, res) => {
 			messageDiv.innerHTML = '';
 			
 			form.classList.add('loading');
+
+		
 			
 			const formData = {
 				businessName: document.getElementById('businessName').value.trim(),
-				pageId: document.getElementById('pageId').value.trim(),
+				objectId: document.getElementById('objectId').value.trim(),
+				objectType: document.getElementById('objectType').value.trim(),
 				callbackUrl: document.getElementById('callbackUrl').value.trim(),
 				verifyToken: document.getElementById('verifyToken').value.trim() || null
 			};
@@ -258,16 +270,20 @@ router.get('/register', (req, res) => {
  */
 router.post('/register', async (req, res) => {
 	try {
-		const { businessName, pageId, callbackUrl, verifyToken } = req.body;
+		const { objectType, businessName, objectId, callbackUrl, verifyToken } = req.body;
+
 
 		// Validation
-		if (!businessName || !pageId || !callbackUrl) {
+		if (!businessName || !objectId || !callbackUrl) {
 			return res.status(400).json({
 				error: 'Missing required fields',
-				required: ['businessName', 'pageId', 'callbackUrl']
+				required: ['businessName', 'objectId', 'callbackUrl']
 			});
 		}
 
+		// Validate object type
+		const validObjectType = objectType === 'group' ? 'group' : 'page';
+		
 		// Validate callback URL format (allow both HTTP and HTTPS for development)
 		if (!callbackUrl.startsWith('http://') && !callbackUrl.startsWith('https://')) {
 			return res.status(400).json({
@@ -275,12 +291,12 @@ router.post('/register', async (req, res) => {
 			});
 		}
 
-		// Check if page already registered
-		const existing = await ClientConfig.findOne({ 'facebook.pageId': String(pageId) });
+		// Check if object already registered (using objectId which is unique)
+		const existing = await ClientConfig.findOne({ 'facebook.objectId': String(objectId) });
 		if (existing) {
 			return res.status(409).json({
-				error: 'Page already registered',
-				pageId: pageId
+				error: `${validObjectType === 'group' ? 'Group' : 'Page'} already registered`,
+				objectId: objectId
 			});
 		}
 
@@ -288,13 +304,14 @@ router.post('/register', async (req, res) => {
 		const finalVerifyToken = verifyToken || oauthService.constructor.generateVerifyToken(32);
 
 		// Generate authorization URL
-		const authUrl = oauthService.generateAuthUrl(pageId, pageId);
+		const authUrl = oauthService.generateAuthUrl(objectId, validObjectType, `${validObjectType}:${objectId}`);
 
 		// Create client config
-		const clientConfig = new ClientConfig({
+		const clientConfigData = {
 			businessName: businessName.trim(),
+			objectType: validObjectType,
 			facebook: {
-				pageId: String(pageId).trim(),
+				objectId: String(objectId).trim(),
 				appId: serviceConfig.facebook.appId,
 				appSecret: serviceConfig.facebook.appSecret,
 				verifyToken: finalVerifyToken,
@@ -313,16 +330,25 @@ router.post('/register', async (req, res) => {
 				status: 'pending',
 				authUrl: authUrl,
 			},
-		});
+		};
 
+		// Set pageId or groupId based on object type
+		if (validObjectType === 'group') {
+			clientConfigData.facebook.groupId = String(objectId).trim();
+		} else {
+			clientConfigData.facebook.pageId = String(objectId).trim();
+		}
+
+		const clientConfig = new ClientConfig(clientConfigData);
 		await clientConfig.save();
 
-		logger.info({ pageId, businessName }, 'Client registered successfully');
+		logger.info({ objectId, objectType: validObjectType, businessName }, 'Client registered successfully');
 
 		res.status(201).json({
 			success: true,
 			message: 'Registration successful. Please authorize permissions.',
-			pageId: pageId,
+			objectType: validObjectType,
+			objectId: objectId,
 			authUrl: authUrl,
 			verifyToken: finalVerifyToken,
 		});

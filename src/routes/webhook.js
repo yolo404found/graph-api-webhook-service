@@ -111,30 +111,31 @@ router.post('/facebook', async (req, res) => {
 	const body = req.rawBodyJson || {};
 
 	try {
-		// Facebook sends page ID in different places; check common paths
-		const pageId =
+		// Facebook sends object ID (page or group) in different places; check common paths
+		const objectId =
 			body?.entry?.[0]?.id ||
 			body?.object_id ||
 			body?.object ||
 			body?.page?.id ||
+			body?.group?.id ||
 			null;
 
-		if (!pageId) {
-			logger.warn({ requestId }, 'Unable to determine pageId from webhook payload');
+		if (!objectId) {
+			logger.warn({ requestId }, 'Unable to determine object ID from webhook payload');
 			return;
 		}
 
-		// Load tenant config from database
-		const tenant = await ClientConfig.findOne({ 'facebook.pageId': String(pageId) }).lean().exec();
+		// Load tenant config from database (using objectId which works for both page and group)
+		const tenant = await ClientConfig.findOne({ 'facebook.objectId': String(objectId) }).lean().exec();
 		if (!tenant) {
-			logger.warn({ pageId, requestId }, 'No tenant configuration found for pageId');
+			logger.warn({ objectId, requestId }, 'No tenant configuration found for objectId');
 			return;
 		}
 
 		const callbackUrl = tenant.webhook?.callbackUrl;
 		const secretToken = tenant.facebook?.appSecret || tenant.facebook?.verifyToken || '';
 		if (!callbackUrl || !secretToken) {
-			logger.warn({ pageId, requestId }, 'Tenant config missing callbackUrl or secret');
+			logger.warn({ objectId, requestId }, 'Tenant config missing callbackUrl or secret');
 			return;
 		}
 
@@ -144,7 +145,7 @@ router.post('/facebook', async (req, res) => {
 				secretToken,
 				rawBodyBuffer: req.rawBodyBuffer,
 				requestId,
-				pageId: String(pageId),
+				pageId: String(objectId), // Keep pageId parameter name for backward compatibility
 				timeoutMs: serviceConfig.forwardTimeoutMs,
 			});
 
