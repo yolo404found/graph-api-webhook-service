@@ -10,7 +10,7 @@ const ClientConfigSchema = new mongoose.Schema(
 			appId: { type: String, required: true },
 			appSecret: { type: String, required: true },
 			verifyToken: { type: String, required: true },
-			accessToken: { type: String, required: true },
+			accessToken: { type: String, default: '' }, // Will be set after OAuth flow
 		},
 		webhook: {
 			callbackUrl: { type: String, required: true },
@@ -20,6 +20,16 @@ const ClientConfigSchema = new mongoose.Schema(
 			autoPostToTelegram: { type: Boolean, default: false },
 			logIncomingData: { type: Boolean, default: true },
 			keepRawPayloadDays: { type: Number, default: 30 },
+		},
+		registration: {
+			status: { 
+				type: String, 
+				enum: ['pending', 'authorized', 'completed'], 
+				default: 'pending' 
+			},
+			authUrl: { type: String }, // Authorization URL generated for client
+			authorizedAt: { type: Date },
+			completedAt: { type: Date },
 		},
 	},
 	{ timestamps: true, collection: 'client_configs' }

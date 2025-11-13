@@ -3,7 +3,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { logger } = require('../utils/logger');
-const { serviceConfig, loadFileTenantConfig } = require('../config');
+const { serviceConfig } = require('../config');
 const ClientConfig = require('../models/ClientConfig');
 const { forwardPayload } = require('../services/forwarder');
 const { RetryQueue } = require('../services/retryQueue');
@@ -124,11 +124,8 @@ router.post('/facebook', async (req, res) => {
 			return;
 		}
 
-		// Load tenant config: try DB then file fallback
-		let tenant = await ClientConfig.findOne({ 'facebook.pageId': String(pageId) }).lean().exec();
-		if (!tenant) {
-			tenant = loadFileTenantConfig(String(pageId));
-		}
+		// Load tenant config from database
+		const tenant = await ClientConfig.findOne({ 'facebook.pageId': String(pageId) }).lean().exec();
 		if (!tenant) {
 			logger.warn({ pageId, requestId }, 'No tenant configuration found for pageId');
 			return;

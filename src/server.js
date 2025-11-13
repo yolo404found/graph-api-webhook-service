@@ -9,6 +9,9 @@ const morgan = require('morgan');
 const { httpLogger, logger } = require('./utils/logger');
 const { serviceConfig } = require('./config');
 const webhookRouter = require('./routes/webhook');
+const registrationRouter = require('./routes/registration');
+const authRouter = require('./routes/auth');
+const testRouter = require('../../test/test');
 
 async function start() {
 	const app = express();
@@ -20,6 +23,10 @@ async function start() {
 	// Security headers
 	app.use(helmet({ contentSecurityPolicy: false }));
 
+	// JSON body parsing
+	app.use(express.json());
+	app.use(express.urlencoded({ extended: true }));
+
 	// Basic request logging (dev-friendly)
 	if (serviceConfig.env === 'development') {
 		app.use(morgan('dev'));
@@ -30,12 +37,16 @@ async function start() {
 	// Root route
 	app.get('/', (req, res) => {
 		res.status(200).json({ 
-			service: 'Facebook Graph API Service',
-			status: 'running',
-			endpoints: {
-				health: '/health',
-				webhook: '/webhook/facebook'
-			}
+		service: 'Facebook Graph API Service',
+		status: 'running',
+		endpoints: {
+			health: '/health',
+			webhook: '/webhook/facebook',
+			register: '/api/register',
+			authCallback: '/api/auth/callback',
+			testWebhook: '/api/test/webhook/:pageId',
+			testStatus: '/api/test/status/:pageId'
+		}
 		});
 	});
 
@@ -43,6 +54,13 @@ async function start() {
 	app.get('/health', (req, res) => {
 		res.status(200).json({ status: 'ok', time: new Date().toISOString() });
 	});
+
+	// Registration and auth routes
+	app.use('/api', registrationRouter);
+	app.use('/api/auth', authRouter);
+	
+	// Test routes (for testing client registration)
+	app.use('/api/test', testRouter);
 
 	// Rate limiting for webhook endpoint
 	// With trust proxy: 1, Express sets req.ip correctly from X-Forwarded-For

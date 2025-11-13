@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test-client": "node test-client-webhook-server.js",
-    "test-client:dev": "nodemon test-client-webhook-server.js",
+    "test-client": "node test/test-client-webhook-server.js",
+    "test-client:dev": "nodemon test/test-client-webhook-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

@@ -15,25 +15,39 @@ Multi-tenant webhook processing system that receives Facebook Page updates and f
    npm install
    ```
 2. Configure environment:
-   - Copy `.env.example` to `.env` (create if not present) and fill in:
-     - `PORT`, `FB_APP_ID`, `FB_APP_SECRET`, `FB_VERIFY_TOKEN`, `MONGODB_URI`
-3. Provide tenant config:
-   - Option A: Insert into MongoDB collection `client_configs` using the schema in `src/models/ClientConfig.js`.
-   - Option B: File fallback: create `configs/<PAGE_ID>.json` based on `configs/sample-tenant.json`.
-4. Run:
+   - Copy `.env.example` to `.env`:
+     ```bash
+     cp .env.example .env
+     ```
+   - Edit `.env` and fill in your values:
+     - `FB_APP_ID`, `FB_APP_SECRET`, `FB_VERIFY_TOKEN` (from Facebook Developer Console)
+     - `BASE_URL` (your server URL, e.g., `http://localhost:3000` or ngrok URL for OAuth)
+     - `MONGODB_URI` (default: `mongodb://localhost:27017/facebook-graph-api-service`)
+     - Other optional settings (see `.env.example` for details)
+3. Start MongoDB (if running locally)
+4. Run the service:
    ```bash
-   npm run dev
+   npm start
    ```
+5. Register clients via the web interface:
+   - Visit `http://localhost:3000/api/register`
+   - Fill out the registration form
+   - Complete OAuth flow to generate access tokens
 
 ### Endpoints
-- `GET /health` — Health check.
+- `GET /health` — Health check
+- `GET /api/register` — Client registration form
+- `POST /api/register` — Register a new client
+- `GET /api/auth/callback` — OAuth callback handler
+- `GET /api/test/status/:pageId` — Check registration status
+- `POST /api/test/webhook/:pageId` — Simulate webhook for testing
 - `GET /webhook/facebook` — Facebook verification:
   - FB calls with `hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=<challenge>`
   - Service responds with `challenge` if `FB_VERIFY_TOKEN` matches.
 - `POST /webhook/facebook` — Incoming Facebook webhook events:
   - Service immediately responds `200` to Facebook.
   - Extracts `pageId` from payload (`entry[0].id` preferred).
-  - Loads tenant config (DB first, then `configs/<pageId>.json`).
+  - Loads tenant config from MongoDB database.
   - Forwards raw JSON to tenant `webhook.callbackUrl` with headers:
     - `X-Service-Signature: sha256=<hmac>` (HMAC using tenant secret)
     - `X-Service-Request-Id: <uuid>`
@@ -52,21 +66,22 @@ Multi-tenant webhook processing system that receives Facebook Page updates and f
 
 ### Operational Settings
 Configure via env vars:
-- `PORT` (default `5000`)
+- `PORT` (default `3000`)
+- `BASE_URL` (your server URL, required for OAuth)
 - `MONGODB_URI` (default `mongodb://localhost:27017/facebook-graph-api-service`)
 - `FB_APP_ID`, `FB_APP_SECRET`, `FB_VERIFY_TOKEN`
 - `FORWARD_TIMEOUT_MS` (default `4500`)
 - `MAX_RETRY_ATTEMPTS` (default `5`)
 - `RETRY_BACKOFF_BASE_MS` (default `1000`)
-- `LOG_LEVEL` (`info`, `debug`, etc.)
+- `NODE_ENV` (default `development`)
 
 ### Security Notes
 - Require HTTPS on client callback endpoints.
 - Rotate Facebook credentials per policy.
 - Store secrets securely in your secret manager; environment variables are for local dev.
 
-### Sample Tenant File
-See `configs/sample-tenant.json`. For file-based configs, name files `configs/<PAGE_ID>.json`.
+### Client Registration
+Clients are registered via the web interface at `/api/register`. All client configurations are stored in MongoDB. See `docs/REGISTRATION_GUIDE.md` for detailed instructions.
 
 ### Reference package.json
 The service aligns with the reference shown by the user; this project uses:

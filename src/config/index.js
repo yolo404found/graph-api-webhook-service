@@ -1,13 +1,12 @@
 'use strict';
 
 require('dotenv').config();
-const path = require('path');
-const fs = require('fs');
-const { logger } = require('../utils/logger');
 
+const port = parseInt(process.env.PORT || '3000', 10);
 const serviceConfig = {
-	port: parseInt(process.env.PORT || '6000', 10),
+	port: port,
 	env: process.env.NODE_ENV || 'development',
+	baseUrl: process.env.BASE_URL || `http://localhost:${port}`,
 	requestTimeoutMs: parseInt(process.env.REQUEST_TIMEOUT_MS || '6000', 10),
 	forwardTimeoutMs: parseInt(process.env.FORWARD_TIMEOUT_MS || '4500', 10),
 	maxRetryAttempts: parseInt(process.env.MAX_RETRY_ATTEMPTS || '5', 10),
@@ -20,22 +19,8 @@ const serviceConfig = {
 	},
 };
 
-function loadFileTenantConfig(pageId) {
-	try {
-		const filePath = path.join(process.cwd(), 'configs', `${pageId}.json`);
-		if (!fs.existsSync(filePath)) return null;
-		const raw = fs.readFileSync(filePath, 'utf8');
-		const parsed = JSON.parse(raw);
-		return parsed;
-	} catch (err) {
-		logger.warn({ err }, 'Failed to load file-based tenant config');
-		return null;
-	}
-}
-
 module.exports = {
 	serviceConfig,
-	loadFileTenantConfig,
 };
 
 

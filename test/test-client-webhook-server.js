@@ -97,6 +97,10 @@ app.get('/health', (req, res) => {
 
 // Root
 app.get('/', (req, res) => {
+	const protocol = req.protocol;
+	const host = req.get('host');
+	const callbackUrl = `${protocol}://${host}/webhook/facebook`;
+	
 	res.status(200).json({
 		service: 'Test Client Webhook Server',
 		status: 'running',
@@ -104,10 +108,12 @@ app.get('/', (req, res) => {
 			webhook: '/webhook/facebook',
 			health: '/health'
 		},
+		callbackUrl: callbackUrl,
 		instructions: {
-			step1: 'Update your page config file to point callbackUrl to this server',
-			step2: 'Set the secret token in both configs to match',
-			step3: 'Watch this console for incoming webhook payloads'
+			step1: 'Use this callback URL in the registration form:',
+			step2: callbackUrl,
+			step3: 'Set verify token to match: ' + SECRET_TOKEN,
+			step4: 'Watch this console for incoming webhook payloads'
 		}
 	});
 });
@@ -119,7 +125,13 @@ app.listen(PORT, () => {
 	console.log(`Port: ${PORT}`);
 	console.log(`Webhook Endpoint: http://localhost:${PORT}/webhook/facebook`);
 	console.log(`Health Check: http://localhost:${PORT}/health`);
-	console.log(`Secret Token: ${SECRET_TOKEN.substring(0, 10)}...`);
+	console.log(`Secret Token: ${SECRET_TOKEN}`);
+	console.log('\n📋 Use this callback URL in registration form:');
+	console.log(`   http://localhost:${PORT}/webhook/facebook`);
+	console.log('\n💡 For HTTPS (required for production):');
+	console.log('   1. Install ngrok: https://ngrok.com/download');
+	console.log(`   2. Run: ngrok http ${PORT}`);
+	console.log('   3. Use the ngrok HTTPS URL as callback URL');
 	console.log('\nWaiting for webhook payloads from Facebook Graph API Service...');
 	console.log('='.repeat(80) + '\n');
 });

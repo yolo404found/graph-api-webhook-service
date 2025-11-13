@@ -7,7 +7,7 @@
 const http = require('http');
 const https = require('https');
 
-const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:6000/webhook/facebook';
+const WEBHOOK_URL = process.env.WEBHOOK_URL || 'http://localhost:3000/webhook/facebook';
 const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || 'aKd6OMTBDWSOd57AXluKh2Mmqi4dsUaJ';
 
 // Parse URL
